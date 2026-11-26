@@ -58,6 +58,22 @@ export function createRenderer(canvas) {
     g.addColorStop(1, pal.skyLow);
     ctx.fillStyle = g;
     ctx.fillRect(0, 0, W, H * 0.56);
+    // Bintang untuk palet malam — posisi tetap dari hash indeks (deterministik).
+    if (pal.stars) {
+      ctx.fillStyle = '#ffffff';
+      for (let i = 0; i < 70; i++) {
+        const hx = Math.sin(i * 12.9898) * 43758.5453;
+        const hy = Math.sin(i * 78.233) * 12543.1234;
+        const sx = (hx - Math.floor(hx)) * W;
+        const sy = (hy - Math.floor(hy)) * H * 0.5;
+        const r = 0.6 + ((hx * 7 - Math.floor(hx * 7)) * 1.1);
+        ctx.globalAlpha = 0.35 + ((hy * 5 - Math.floor(hy * 5)) * 0.55);
+        ctx.beginPath();
+        ctx.arc(sx, sy, r, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+    }
     // Matahari + halo.
     const sunX = W * 0.76 - state.heading * 60;
     const sunY = H * 0.2 - state.pitch * 40;
@@ -678,13 +694,18 @@ export function createRenderer(canvas) {
     ctx.fillStyle = '#ffb02e';
     ctx.font = '700 20px system-ui, sans-serif';
     ctx.fillText(`SKOR ${state.score}`, W - 216, 90);
+    // Progress ring + tingkat kesulitan.
+    ctx.fillStyle = 'rgba(255,255,255,0.18)';
+    ctx.fillRect(W - 216, 96, 188, 6);
+    ctx.fillStyle = state.ringsHit === state.ringsTotal ? '#37d67a' : '#ff8c1a';
+    ctx.fillRect(W - 216, 96, 188 * (state.ringsTotal > 0 ? state.ringsHit / state.ringsTotal : 0), 6);
     ctx.fillStyle = 'rgba(190,225,245,0.9)';
     ctx.font = '600 13px system-ui, sans-serif';
     const distLeft = Math.max(0, Math.round((world.course.lengthM - state.dist) / 100) / 10);
     const timeTxt = m.timeLimit > 0
       ? `WAKTU ${Math.max(0, Math.ceil(m.timeLimit - state.time))} dtk`
       : `SISA ${distLeft} km`;
-    ctx.fillText(timeTxt, W - 216, 114);
+    ctx.fillText(`${timeTxt}  ·  ${m.diffName ? m.diffName.toUpperCase() : 'NORMAL'}`, W - 216, 114);
     drawArtificialHorizon(state);
     drawGauges(state);
     // Panah ke ring berikutnya.
@@ -741,7 +762,7 @@ export function createRenderer(canvas) {
     }
   }
 
-  function drawTitle(world, bests, selected) {
+  function drawTitle(world, bests, selected, difficulty) {
     ctx.fillStyle = 'rgba(6,14,24,0.3)';
     ctx.fillRect(0, 0, W, H);
     ctx.textAlign = 'center';
@@ -754,10 +775,11 @@ export function createRenderer(canvas) {
     ctx.fillStyle = '#ffd98a';
     ctx.fillText('Kurir udara Kepulauan Senja — terbang, lewati ring, mendarat mulus.', W / 2, H * 0.2 + 34);
     ctx.shadowBlur = 0;
-    // Kartu misi.
-    const cardW = 310;
-    const gap = 22;
-    const totalW = cardW * 3 + gap * 2;
+    // Kartu misi (5 kartu sebaris).
+    const cardW = 224;
+    const cardH = 210;
+    const gap = 14;
+    const totalW = cardW * 5 + gap * 4;
     let x = W / 2 - totalW / 2;
     const y = H * 0.33;
     MISSIONS.forEach((mm, i) => {
@@ -766,26 +788,41 @@ export function createRenderer(canvas) {
       ctx.strokeStyle = sel ? '#ffb02e' : 'rgba(255,255,255,0.3)';
       ctx.lineWidth = sel ? 3 : 1;
       ctx.beginPath();
-      ctx.roundRect(x, y, cardW, 196, 12);
+      ctx.roundRect(x, y, cardW, cardH, 12);
       ctx.fill();
       ctx.stroke();
       ctx.fillStyle = '#ffffff';
-      ctx.font = '700 20px system-ui, sans-serif';
-      ctx.fillText(mm.name, x + cardW / 2, y + 34);
+      // Kecilkan font nama bila terlalu lebar untuk kartu.
+      let nameSize = 17;
+      ctx.font = `700 ${nameSize}px system-ui, sans-serif`;
+      while (ctx.measureText(mm.name).width > cardW - 24 && nameSize > 12) {
+        nameSize -= 1;
+        ctx.font = `700 ${nameSize}px system-ui, sans-serif`;
+      }
+      ctx.fillText(mm.name, x + cardW / 2, y + 32);
       ctx.fillStyle = '#ffd98a';
       ctx.font = '600 12px system-ui, sans-serif';
-      ctx.fillText(mm.sub, x + cardW / 2, y + 56);
+      ctx.fillText(mm.sub, x + cardW / 2, y + 54);
       ctx.fillStyle = 'rgba(230,240,250,0.92)';
-      ctx.font = '400 12.5px system-ui, sans-serif';
-      wrapText(mm.brief, x + 18, y + 82, cardW - 36, 17);
+      ctx.font = '400 12px system-ui, sans-serif';
+      wrapText(mm.brief, x + 16, y + 80, cardW - 32, 16);
       const best = bests[mm.id] ?? 0;
+      ctx.textAlign = 'center'; // wrapText mengeset left; kembalikan ke tengah
       ctx.fillStyle = '#37d67a';
       ctx.font = '700 14px system-ui, sans-serif';
-      ctx.fillText(best > 0 ? `TERBAIK: ${best}` : 'BELUM DIMAINKAN', x + cardW / 2, y + 176);
+      ctx.fillText(best > 0 ? `TERBAIK: ${best}` : 'BELUM DIMAINKAN', x + cardW / 2, y + cardH - 18);
       x += cardW + gap;
     });
+    // Pil tingkat kesulitan di bawah kartu.
+    const diffText = `TINGKAT: ${difficulty.name.toUpperCase()}  ·  tekan T untuk ganti (Mudah / Normal / Sulit)`;
+    ctx.font = '700 15px system-ui, sans-serif';
+    const dw = ctx.measureText(diffText).width + 36;
+    panel(W / 2 - dw / 2, y + cardH + 14, dw, 34);
+    ctx.fillStyle = '#ffd98a';
+    ctx.textAlign = 'center';
+    ctx.fillText(diffText, W / 2, y + cardH + 37);
     // Baris kontrol + kredit di atas panel gelap supaya terbaca di atas landasan.
-    const ctrlText = '1/2/3 misi · Enter terbang · W/S throttle · ←/→ belok · ↑/↓ naik-turun · Space rem';
+    const ctrlText = '1-5 misi · T kesulitan · Enter terbang · W/S throttle · ←/→ belok · ↑/↓ naik-turun · Space rem';
     const creditText = 'Game orisinal — dibuat untuk bounty make.fun “Make the best flight game”.';
     ctx.font = '600 14px system-ui, sans-serif';
     const w1 = ctx.measureText(ctrlText).width;
@@ -820,11 +857,11 @@ export function createRenderer(canvas) {
     if (line) ctx.fillText(line, x, yy);
   }
 
-  function drawDebrief(world, state) {
+  function drawDebrief(world, state, best) {
     ctx.fillStyle = 'rgba(6,14,24,0.55)';
     ctx.fillRect(0, 0, W, H);
     const w = 460;
-    const h = 420;
+    const h = 448;
     const x = W / 2 - w / 2;
     const y = H / 2 - h / 2;
     panel(x, y, w, h);
@@ -836,10 +873,14 @@ export function createRenderer(canvas) {
     ctx.font = '600 16px system-ui, sans-serif';
     if (state.phase === 'crashed') {
       ctx.fillText(state.crashReason, W / 2, y + 92);
+      ctx.fillStyle = 'rgba(230,240,250,0.9)';
+      ctx.font = '400 15px system-ui, sans-serif';
+      ctx.fillText(`Ring dilewati ${state.ringsHit}/${state.ringsTotal} · jarak ${Math.round(state.dist)} m`, W / 2, y + 118);
     } else {
-      ctx.fillText(world.mission.name, W / 2, y + 92);
+      ctx.fillText(`${world.mission.name} · ${world.mission.diffName ? world.mission.diffName : 'Normal'}`, W / 2, y + 92);
     }
     let yy = y + 128;
+    if (state.phase === 'crashed') yy = y + 148;
     ctx.textAlign = 'left';
     ctx.font = '400 15px system-ui, sans-serif';
     for (const row of state.breakdown) {
@@ -860,23 +901,45 @@ export function createRenderer(canvas) {
     ctx.font = '700 26px system-ui, sans-serif';
     ctx.textAlign = 'center';
     ctx.fillText(`SKOR AKHIR  ${state.score}`, W / 2, yy + 40);
+    if (state.phase === 'done' && best > 0) {
+      ctx.fillStyle = '#37d67a';
+      ctx.font = '600 15px system-ui, sans-serif';
+      ctx.fillText(state.score >= best ? '★ SKOR TERBAIK BARU!' : `TERBAIK MISI INI: ${best}`, W / 2, yy + 66);
+    }
     ctx.fillStyle = 'rgba(230,240,250,0.9)';
-    ctx.font = '600 15px system-ui, sans-serif';
-    ctx.fillText('Enter: ulangi misi · 1/2/3: ganti misi · R: menu', W / 2, y + h - 26);
+    ctx.font = '600 14px system-ui, sans-serif';
+    ctx.fillText('Enter: ulangi misi  ·  N: misi berikutnya', W / 2, y + h - 46);
+    ctx.fillText('1-5: ganti misi  ·  R: menu', W / 2, y + h - 24);
   }
 
-  function drawPaused() {
+  function drawPaused(world) {
+    const state = world.state;
     ctx.fillStyle = 'rgba(6,14,24,0.55)';
     ctx.fillRect(0, 0, W, H);
+    const w = 460;
+    const h = 250;
+    const x = W / 2 - w / 2;
+    const y = H / 2 - h / 2;
+    panel(x, y, w, h);
     ctx.textAlign = 'center';
     ctx.fillStyle = '#ffffff';
     ctx.font = '800 44px system-ui, sans-serif';
-    ctx.fillText('JEDA', W / 2, H / 2 - 10);
+    ctx.fillText('JEDA', W / 2, y + 62);
+    ctx.fillStyle = '#ffd98a';
     ctx.font = '600 16px system-ui, sans-serif';
-    ctx.fillText('P / Esc untuk lanjut · R untuk kembali ke menu', W / 2, H / 2 + 26);
+    ctx.fillText(`${world.mission.name} · ${world.mission.diffName ? world.mission.diffName : 'Normal'}`, W / 2, y + 94);
+    ctx.fillStyle = 'rgba(230,240,250,0.92)';
+    ctx.font = '400 16px system-ui, sans-serif';
+    ctx.fillText(`Ring ${state.ringsHit}/${state.ringsTotal}  ·  Skor ${state.score}  ·  Bahan bakar ${Math.round(state.fuel)}`, W / 2, y + 126);
+    ctx.fillStyle = '#ffffff';
+    ctx.font = '600 15px system-ui, sans-serif';
+    ctx.fillText('P: lanjut  ·  1-5: ganti misi  ·  R: kembali ke menu  ·  M: suara', W / 2, y + 170);
+    ctx.fillStyle = 'rgba(230,240,250,0.7)';
+    ctx.font = '400 13px system-ui, sans-serif';
+    ctx.fillText('Pesawat diam — tidak ada bahan bakar yang terbuang saat jeda.', W / 2, y + 200);
   }
 
-  function draw(world, screen, bests, selected, time) {
+  function draw(world, screen, bests, selected, time, difficulty) {
     const state = world.state;
     const pal = PALETTES[world.mission.palette];
     // Langit & darat selalu digambar — menu pun menampilkan dunia.
@@ -890,11 +953,11 @@ export function createRenderer(canvas) {
     drawSpeedLines(state);
     drawVignette();
     if (screen === SCREEN_PLAY) drawHUD(world, state, time);
-    if (screen === SCREEN_TITLE) drawTitle(world, bests, selected);
-    if (screen === SCREEN_OVER) drawDebrief(world, state);
+    if (screen === SCREEN_TITLE) drawTitle(world, bests, selected, difficulty);
+    if (screen === SCREEN_OVER) drawDebrief(world, state, bests[world.mission.id] ?? 0);
     if (screen === SCREEN_PAUSED) {
       drawHUD(world, state, time);
-      drawPaused();
+      drawPaused(world);
     }
   }
 

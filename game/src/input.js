@@ -6,6 +6,8 @@ export const ACTION_CONFIRM = 'confirm';
 export const ACTION_PAUSE = 'pause';
 export const ACTION_MUTE = 'mute';
 export const ACTION_RESTART = 'restart';
+export const ACTION_DIFFICULTY = 'difficulty';
+export const ACTION_NEXT = 'next';
 
 const KEYMAP = {
   ArrowLeft: 'left', KeyA: 'left',
@@ -18,6 +20,9 @@ const KEYMAP = {
   KeyM: ACTION_MUTE,
   KeyR: ACTION_RESTART,
   Digit1: 'mission1', Digit2: 'mission2', Digit3: 'mission3',
+  Digit4: 'mission4', Digit5: 'mission5',
+  KeyT: ACTION_DIFFICULTY,
+  KeyN: ACTION_NEXT,
 };
 
 export function createInput(canvas) {

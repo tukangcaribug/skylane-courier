@@ -2,7 +2,7 @@
 // Semua angka tuning di satu tempat supaya grade-local dan play-test
 // bisa mengubah feel tanpa menyentuh model terbang atau renderer.
 export const STEP = 1 / 60;
-export const BEST_KEY = 'skylane-courier-best-v1';
+export const BEST_KEY = 'skylane-courier-best-v2';
 
 // Dunia: kursus diukur dalam meter; satu segmen = 25 m ke depan.
 export const SEG_LEN = 25;
@@ -90,7 +90,56 @@ export const MISSIONS = [
     brief:
       'Balapan melawan matahari terbenam: 10 ring, 240 detik. Setiap ring memberi bonus waktu — terbang cepat, tapi jangan sampai crash.',
   },
+  {
+    id: 'night-courier',
+    name: 'Kurir Malam',
+    sub: 'Misi 4 · 8 ring · gelap',
+    seed: 419,
+    lengthM: 5200,
+    rings: 8,
+    fuel: 92,
+    wind: 0.3,
+    timeLimit: 0,
+    palette: 'night',
+    brief:
+      'Paket darurat di tengah malam: terbang dalam gelap, ikuti cahaya ring dan lampu landasan. Jangan sampai kehilangan arah.',
+  },
+  {
+    id: 'storm-gauntlet',
+    name: 'Badai Beruntun',
+    sub: 'Misi 5 · 12 ring · 300 detik',
+    seed: 523,
+    lengthM: 6400,
+    rings: 12,
+    fuel: 102,
+    wind: 0.65,
+    timeLimit: 300,
+    palette: 'storm',
+    brief:
+      'Ujian terakhir kurir Senja: 12 ring menembus badai terkuat, 300 detik. Angin mengguncang dari segala arah — hanya pilot paling tenang yang lolos.',
+  },
 ];
+
+// Tingkat kesulitan: mengubah jumlah ring, bahan bakar, batas waktu,
+// dan kekuatan angin dari misi dasar. Normal = angka misi apa adanya.
+export const DIFFICULTIES = [
+  { id: 'easy', name: 'Mudah', ringDelta: -2, fuelDelta: 20, timeMul: 1.5, windMul: 0.6 },
+  { id: 'normal', name: 'Normal', ringDelta: 0, fuelDelta: 0, timeMul: 1, windMul: 1 },
+  { id: 'hard', name: 'Sulit', ringDelta: 2, fuelDelta: -10, timeMul: 0.8, windMul: 1.2 },
+];
+
+// Varian misi pada satu tingkat kesulitan (objek baru; misi dasar tak berubah).
+export function applyDifficulty(mission, diff) {
+  return {
+    ...mission,
+    rings: Math.max(4, mission.rings + diff.ringDelta),
+    fuel: mission.fuel + diff.fuelDelta,
+    timeLimit: mission.timeLimit > 0 ? Math.round(mission.timeLimit * diff.timeMul) : 0,
+    wind: mission.wind * diff.windMul,
+    diffId: diff.id,
+    diffName: diff.name,
+  };
+}
 
 export const PALETTES = {
   dawn: {
@@ -116,6 +165,15 @@ export const PALETTES = {
     landFar: '#5d4a68', landMid: '#463452', landNear: '#2e2138',
     beach: '#d9a878', mountain: '#453a5e', mountainSnow: '#e8c9a8',
     cloud: '#f2b98a', cloudShade: '#b87a8a',
+  },
+  night: {
+    skyTop: '#070d1d', skyMid: '#16233f', skyLow: '#33456b',
+    sun: '#dfe6f2', sunCore: '#ffffff', haze: '#232f4d',
+    seaFar: '#0d1828', seaNear: '#081120', seaGlint: '#6f93b8',
+    landFar: '#1a2620', landMid: '#131e19', landNear: '#0c1510',
+    beach: '#5d5644', mountain: '#161f30', mountainSnow: '#7d8aa0',
+    cloud: '#26334d', cloudShade: '#161f31',
+    stars: true,
   },
 };
 

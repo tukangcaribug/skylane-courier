@@ -72,7 +72,7 @@ export function buildCourse(mission) {
     const alt = Math.max(150, ground + 130 + rng.next() * 190);
     course.rings.push({
       d,
-      x: (rng.next() - 0.5) * 260,
+      x: (rng.next() - 0.5) * 220,
       alt,
       r: 42 + rng.next() * 14,
       passed: false,

@@ -3,11 +3,11 @@
 // paused, over. ?seed=N menetapkan seed; ?shot=start|flight|canyon|land
 // (dengan &mission=... &seed=N) menggelar scene itu untuk screenshot dan
 // menyetel window.__shotReady sesudah dua kali lukis.
-import { BEST_KEY, MISSIONS, STEP, missionById } from './config.js';
+import { BEST_KEY, DIFFICULTIES, MISSIONS, STEP, applyDifficulty, missionById } from './config.js';
 import { createRandom } from './random.js';
 import { createWorld, resetWorld, stepWorld } from './flight.js';
 import {
-  ACTION_CONFIRM, ACTION_MUTE, ACTION_PAUSE, ACTION_RESTART, createInput,
+  ACTION_CONFIRM, ACTION_DIFFICULTY, ACTION_MUTE, ACTION_NEXT, ACTION_PAUSE, ACTION_RESTART, createInput,
 } from './input.js';
 import { createAudio } from './audio.js';
 import { createRenderer, SCREEN_OVER, SCREEN_PAUSED, SCREEN_PLAY, SCREEN_TITLE } from './render.js';
@@ -50,11 +50,21 @@ function saveBest(missionId, value) {
 
 let bests = readBests();
 let selected = 0;
+let diffIndex = 1; // Normal
+let difficulty = DIFFICULTIES[diffIndex];
 let screen = SCREEN_TITLE;
-let world = createWorld(MISSIONS[0]);
+let world = createWorld(applyDifficulty(MISSIONS[0], difficulty));
 let time = 0;
 let lastEvent = null;
 let muted = false;
+
+function missionVariant(index) {
+  return applyDifficulty(MISSIONS[index], difficulty);
+}
+
+function nextMissionIndex() {
+  return (selected + 1) % MISSIONS.length;
+}
 
 function setStatus(text) {
   if (status) status.textContent = text;
@@ -62,31 +72,43 @@ function setStatus(text) {
 
 function startMission(index) {
   selected = index;
-  resetWorld(world, MISSIONS[index]);
+  resetWorld(world, missionVariant(index));
   screen = SCREEN_PLAY;
   lastEvent = null;
   audio.unlock();
   audio.click();
-  setStatus(`${MISSIONS[index].name}: terbang lewati ring, lalu mendarat.`);
+  setStatus(`${MISSIONS[index].name} (${difficulty.name}): terbang lewati ring, lalu mendarat.`);
+}
+
+function cycleDifficulty() {
+  diffIndex = (diffIndex + 1) % DIFFICULTIES.length;
+  difficulty = DIFFICULTIES[diffIndex];
+  audio.click();
+  setStatus(`Tingkat kesulitan: ${difficulty.name}.`);
 }
 
 function backToTitle() {
-  resetWorld(world, MISSIONS[selected]);
+  resetWorld(world, missionVariant(selected));
   screen = SCREEN_TITLE;
   setStatus('Skylane Courier: pilih misi, tekan Enter untuk terbang.');
 }
 
 function runShot(name) {
   // Misi per scene: flight + land = misi 1 (fajar), canyon = misi 3 (senja).
-  const missionId = name === 'canyon' ? 'sunset-trial' : 'island-hop';
-  const mission = missionById(missionId);
+  // &mission=... mengesampingkan itu (mis. shot malam dari misi 4).
+  let missionId = name === 'canyon' ? 'sunset-trial' : 'island-hop';
+  if (missionParam) {
+    const idx = MISSIONS.findIndex((m) => m.id === missionParam);
+    if (idx >= 0) missionId = missionParam;
+  }
+  const mission = applyDifficulty(missionById(missionId), difficulty);
   resetWorld(world, mission);
   world.state.best = bests[missionId] ?? 0;
   const scene = stageShot(name, world);
   screen = scene.screen;
   let painted = 0;
   function paint() {
-    renderer.draw(world, screen, bests, selected, time);
+    renderer.draw(world, screen, bests, selected, time, difficulty);
     painted += 1;
     if (painted < 2) requestAnimationFrame(paint);
     else window.__shotReady = true;
@@ -119,6 +141,9 @@ if (shot) {
       if (input.take('mission1')) startMission(0);
       else if (input.take('mission2')) startMission(1);
       else if (input.take('mission3')) startMission(2);
+      else if (input.take('mission4')) startMission(3);
+      else if (input.take('mission5')) startMission(4);
+      else if (input.take(ACTION_DIFFICULTY)) cycleDifficulty();
       else if (input.take(ACTION_CONFIRM)) startMission(selected);
       else if (input.take(ACTION_RESTART)) backToTitle();
     } else if (screen === SCREEN_PLAY) {
@@ -131,11 +156,19 @@ if (shot) {
     } else if (screen === SCREEN_PAUSED) {
       if (input.take(ACTION_PAUSE)) screen = SCREEN_PLAY;
       else if (input.take(ACTION_RESTART)) backToTitle();
-    } else if (screen === SCREEN_OVER) {
-      if (input.take(ACTION_CONFIRM)) startMission(selected);
       else if (input.take('mission1')) startMission(0);
       else if (input.take('mission2')) startMission(1);
       else if (input.take('mission3')) startMission(2);
+      else if (input.take('mission4')) startMission(3);
+      else if (input.take('mission5')) startMission(4);
+    } else if (screen === SCREEN_OVER) {
+      if (input.take(ACTION_CONFIRM)) startMission(selected);
+      else if (input.take(ACTION_NEXT)) startMission(nextMissionIndex());
+      else if (input.take('mission1')) startMission(0);
+      else if (input.take('mission2')) startMission(1);
+      else if (input.take('mission3')) startMission(2);
+      else if (input.take('mission4')) startMission(3);
+      else if (input.take('mission5')) startMission(4);
       else if (input.take(ACTION_RESTART)) backToTitle();
     }
     // Simulasi langkah tetap.
@@ -163,7 +196,7 @@ if (shot) {
       acc = 0;
       audio.update(0, 0, false);
     }
-    renderer.draw(world, screen, bests, selected, time);
+    renderer.draw(world, screen, bests, selected, time, difficulty);
     input.endFrame();
   }
   requestAnimationFrame(frame);
