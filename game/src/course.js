@@ -100,6 +100,34 @@ export function buildCourse(mission) {
       speed: 0.7 + rng.next() * 0.5,
     });
   }
+  // Landmark: mercusuar + desa + palem — aliran RNG SENDIRI (seed ^ konstanta)
+  // supaya pulau/ring/awan/burung tetap identik dengan v2: fisika dan jalur
+  // autopilot tidak berubah, hanya dunia yang kini punya tempat dikenali.
+  const lrng = createRandom((mission.seed ^ 0x9e3779b9) >>> 0);
+  const midIslands = islands.slice(1, -1);
+  const light = midIslands.length > 0
+    ? midIslands[Math.floor(lrng.next() * midIslands.length)]
+    : islands[1];
+  const lightD = (light.d0 + light.d1) / 2;
+  const dest = islands[islands.length - 1];
+  const palms = [];
+  for (let i = 0; i < 9; i++) {
+    const isl = islands[1 + Math.floor(lrng.next() * (islands.length - 1))];
+    palms.push({
+      d: isl.d0 + lrng.next() * (isl.d1 - isl.d0),
+      x: (lrng.next() - 0.5) * 560,
+      lean: (lrng.next() - 0.5) * 0.9,
+      h: 30 + lrng.next() * 14,
+    });
+  }
+  course.landmarks = {
+    // Mercusuar Tanjung Biru: menara di tengah pulau, x = offset lateral
+    // dari garis tengah kursus (meter). Tinggi ~90 kaki.
+    lighthouse: { d: lightD, x: (lrng.next() - 0.5) * 120, h: 90 },
+    // Desa Senja: deret rumah di pulau tujuan, dekat landasan.
+    village: { d: dest.d0 + (dest.d1 - dest.d0) * 0.45, x: 150 + lrng.next() * 60 },
+    palms,
+  };
   return course;
 }
 

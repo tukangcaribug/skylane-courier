@@ -1,6 +1,6 @@
 // Boot + loop utama: input dibaca tiap frame, dunia maju dalam langkah
 // 1/60 detik yang tetap, renderer melukis hasilnya. Layar: title, play,
-// paused, over. ?seed=N menetapkan seed; ?shot=start|flight|canyon|land
+// paused, over. ?seed=N menetapkan seed; ?shot=final|chase|night|storm
 // (dengan &mission=... &seed=N) menggelar scene itu untuk screenshot dan
 // menyetel window.__shotReady sesudah dua kali lukis.
 import { BEST_KEY, DIFFICULTIES, MISSIONS, STEP, applyDifficulty, missionById } from './config.js';
@@ -94,9 +94,17 @@ function backToTitle() {
 }
 
 function runShot(name) {
-  // Misi per scene: flight + land = misi 1 (fajar), canyon = misi 3 (senja).
-  // &mission=... mengesampingkan itu (mis. shot malam dari misi 4).
-  let missionId = name === 'canyon' ? 'sunset-trial' : 'island-hop';
+  // Misi per scene: final = misi 1 (fajar), chase = misi 3 (senja),
+  // night = misi 4 (malam), storm = misi 5 (badai); flight/canyon/land
+  // warisan v1/v2. &mission=... mengesampingkan itu.
+  const shotMission = {
+    final: 'island-hop',
+    chase: 'sunset-trial',
+    night: 'night-courier',
+    storm: 'storm-gauntlet',
+    canyon: 'sunset-trial',
+  };
+  let missionId = shotMission[name] ?? 'island-hop';
   if (missionParam) {
     const idx = MISSIONS.findIndex((m) => m.id === missionParam);
     if (idx >= 0) missionId = missionParam;

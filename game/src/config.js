@@ -2,7 +2,7 @@
 // Semua angka tuning di satu tempat supaya grade-local dan play-test
 // bisa mengubah feel tanpa menyentuh model terbang atau renderer.
 export const STEP = 1 / 60;
-export const BEST_KEY = 'skylane-courier-best-v2';
+export const BEST_KEY = 'skylane-courier-best-v3';
 
 // Dunia: kursus diukur dalam meter; satu segmen = 25 m ke depan.
 export const SEG_LEN = 25;
@@ -157,6 +157,7 @@ export const PALETTES = {
     landFar: '#4d5c4a', landMid: '#3a4a38', landNear: '#24382a',
     beach: '#b8ab8a', mountain: '#3f4a58', mountainSnow: '#c9d4dc',
     cloud: '#aab4bc', cloudShade: '#7d8894',
+    rain: true, // v3: hujan diagonal saat badai
   },
   sunset: {
     skyTop: '#3d3a6e', skyMid: '#b85c7a', skyLow: '#f2a35e',

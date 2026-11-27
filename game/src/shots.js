@@ -96,5 +96,33 @@ export function stageShot(name, world) {
     flySteps(world, pilot, Math.floor(400 / STEP));
     return { screen: SCREEN_OVER, best: world.state.best };
   }
+  // --- Scene v3: semuanya in-flight (menu/debrief tidak lagi jadi screenshot).
+  if (name === 'final') {
+    // Pendekatan akhir: terbang sampai 700 m sebelum landasan tujuan —
+    // landasan 27 + lampu tepi + PAPI terlihat di depan, HUD "LANDASAN".
+    let guard = 0;
+    while (world.state.phase !== 'done' && world.state.phase !== 'crashed'
+      && world.course.lengthM - world.state.dist > 700 && guard < 60000) {
+      stepWorld(world, pilot.axes(), STEP);
+      guard += 1;
+    }
+    return { screen: SCREEN_PLAY, best: world.state.best };
+  }
+  if (name === 'chase') {
+    // Kejar ring di tengah kursus senja (misi 3): mercusuar + desa terlihat.
+    flySteps(world, pilot, Math.floor(72 / STEP));
+    return { screen: SCREEN_PLAY, best: world.state.best };
+  }
+  if (name === 'night') {
+    // Kurir malam (misi 4): ring menyala + sorot mercusuar + jendela desa.
+    // v3: 66 detik agar ring terakhir lebih di tengah frame saat dijepret.
+    flySteps(world, pilot, Math.floor(66 / STEP));
+    return { screen: SCREEN_PLAY, best: world.state.best };
+  }
+  if (name === 'storm') {
+    // Badai beruntun (misi 5): hujan + ring di depan.
+    flySteps(world, pilot, Math.floor(70 / STEP));
+    return { screen: SCREEN_PLAY, best: world.state.best };
+  }
   return { screen: SCREEN_TITLE, best: world.state.best };
 }

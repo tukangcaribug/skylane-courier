@@ -134,10 +134,10 @@ export function createRenderer(canvas) {
       ctx.lineTo(pFarL.x, pFarL.y);
       ctx.closePath();
       ctx.fill();
-      // Kilau laut: garis tipis saat segmen laut dekat.
-      if (seg.ground <= 2 && zNear < 500 && i % 3 === 0) {
+      // Kilau laut: garis tipis saat segmen laut dekat (v3: lebih rapat).
+      if (seg.ground <= 2 && zNear < 500 && i % 2 === 0) {
         ctx.strokeStyle = pal.seaGlint;
-        ctx.globalAlpha = 0.35 * (1 - zNear / 500);
+        ctx.globalAlpha = 0.45 * (1 - zNear / 500);
         ctx.lineWidth = 1;
         ctx.beginPath();
         ctx.moveTo(pNearL.x + (pNearR.x - pNearL.x) * 0.2, pNearL.y);
@@ -189,6 +189,14 @@ export function createRenderer(canvas) {
     ctx.moveTo(0, horizonY);
     ctx.lineTo(W, horizonY);
     ctx.stroke();
+    ctx.globalAlpha = 1;
+    // Pita kabut hangat di atas horizon (v3): langit dan laut menyatu.
+    const hazeG = ctx.createLinearGradient(0, horizonY - 30, 0, horizonY + 2);
+    hazeG.addColorStop(0, 'rgba(255,240,200,0)');
+    hazeG.addColorStop(1, pal.haze);
+    ctx.globalAlpha = 0.28;
+    ctx.fillStyle = hazeG;
+    ctx.fillRect(0, horizonY - 30, W, 32);
     ctx.globalAlpha = 1;
   }
 
@@ -328,6 +336,177 @@ export function createRenderer(canvas) {
     }
   }
 
+  // Landmark dunia: mercusuar, desa, palem — supaya terrain terbaca sebagai
+  // tempat yang dikenali, bukan blok warna abstrak. Digambar jauh-ke-dekat.
+  function drawLandmarks(world, state, pal, time) {
+    const lm = world.course.landmarks;
+    if (!lm) return;
+    const items = [
+      { d: lm.lighthouse.d, kind: 'lighthouse' },
+      { d: lm.village.d, kind: 'village' },
+    ];
+    for (const p of lm.palms) items.push({ d: p.d, kind: 'palm', p });
+    items.sort((a, b) => b.d - a.d);
+    for (const it of items) {
+      const z = it.d - state.dist;
+      if (z < 12 || z > 5200) continue;
+      const cx = centerAt(world.course, it.d);
+      if (it.kind === 'lighthouse') drawLighthouse(world, state, pal, time, cx + lm.lighthouse.x, it.d, lm.lighthouse.h);
+      else if (it.kind === 'village') drawVillage(world, state, pal, time, cx + lm.village.x, it.d);
+      else drawPalm(world, state, pal, cx + it.p.x, it.d, it.p);
+    }
+  }
+
+  // Mercusuar Tanjung Biru: menara meruncing belang merah-putih, galeri +
+  // lampu, dan sorot yang berputar saat gelap.
+  function drawLighthouse(world, state, pal, time, wx, d, hFt) {
+    const horizonY = horizonYFor(state);
+    const camY = camYFor(state);
+    const g = terrainAt(world.course, d);
+    const base = project(wx, g, d - state.dist, state.x, camY, horizonY);
+    const top = project(wx, g + hFt, d - state.dist, state.x, camY, horizonY);
+    const hPx = base.y - top.y;
+    if (hPx < 4) return;
+    const wBase = Math.max(2, hPx * 0.16);
+    const wTop = Math.max(1.5, hPx * 0.09);
+    const night = !!pal.stars;
+    // Sorot (beam) saat gelap: segitiga tembus pandang dari lampu.
+    if (night) {
+      const ang = Math.sin(time * 0.5) * 0.9;
+      const bx = top.x + Math.cos(ang) * hPx * 3.2;
+      const by = top.y + Math.sin(ang) * hPx * 0.5;
+      ctx.save();
+      ctx.globalAlpha = 0.16;
+      ctx.fillStyle = '#fff6c8';
+      ctx.beginPath();
+      ctx.moveTo(top.x, top.y);
+      ctx.lineTo(bx + hPx * 0.35, by - hPx * 0.22);
+      ctx.lineTo(bx + hPx * 0.35, by + hPx * 0.22);
+      ctx.closePath();
+      ctx.fill();
+      ctx.restore();
+    }
+    // Menara: tiga belang (putih-merah-putih).
+    const bands = ['#f2ede0', '#c23b2e', '#f2ede0'];
+    for (let i = 0; i < 3; i++) {
+      const y0 = base.y - (hPx * i) / 3;
+      const y1 = base.y - (hPx * (i + 1)) / 3;
+      const w0 = wBase + ((wTop - wBase) * i) / 3;
+      const w1 = wBase + ((wTop - wBase) * (i + 1)) / 3;
+      ctx.fillStyle = bands[i];
+      ctx.beginPath();
+      ctx.moveTo(base.x - w0, y0);
+      ctx.lineTo(base.x + w0, y0);
+      ctx.lineTo(base.x + w1, y1);
+      ctx.lineTo(base.x - w1, y1);
+      ctx.closePath();
+      ctx.fill();
+    }
+    // Galeri + ruang lampu.
+    ctx.fillStyle = '#2b2f36';
+    ctx.fillRect(top.x - wTop * 1.5, top.y - hPx * 0.12, wTop * 3, hPx * 0.1);
+    ctx.fillStyle = night ? '#ffe9a8' : '#3a4a5a';
+    ctx.beginPath();
+    ctx.arc(top.x, top.y - hPx * 0.16, Math.max(1.5, wTop * 0.8), 0, Math.PI * 2);
+    ctx.fill();
+    if (night) {
+      const glow = ctx.createRadialGradient(top.x, top.y - hPx * 0.16, 1, top.x, top.y - hPx * 0.16, hPx * 0.9);
+      glow.addColorStop(0, 'rgba(255,233,168,0.55)');
+      glow.addColorStop(1, 'rgba(255,233,168,0)');
+      ctx.fillStyle = glow;
+      ctx.fillRect(top.x - hPx, top.y - hPx * 1.1, hPx * 2, hPx * 2);
+    }
+  }
+
+  // Desa Senja: deret rumah dengan jendela hangat yang menyala saat gelap.
+  function drawVillage(world, state, pal, time, wx, d) {
+    const horizonY = horizonYFor(state);
+    const camY = camYFor(state);
+    const g = terrainAt(world.course, d);
+    const night = !!pal.stars;
+    const dusk = pal === PALETTES.sunset || pal === PALETTES.storm;
+    for (let i = 0; i < 6; i++) {
+      const hx = wx + (i - 2.5) * 34;
+      const p = project(hx, g, d - state.dist, state.x, camY, horizonY);
+      const s = p.scale * (W / 2);
+      const w = Math.max(2, 16 * s * 0.09);
+      const h = Math.max(2, 13 * s * 0.09);
+      if (w < 2.5) continue;
+      // Dinding + atap.
+      ctx.fillStyle = i % 2 === 0 ? '#e8dcc0' : '#d9c9a8';
+      ctx.fillRect(p.x - w / 2, p.y - h, w, h);
+      ctx.fillStyle = i % 2 === 0 ? '#a34d2d' : '#7a4a2e';
+      ctx.beginPath();
+      ctx.moveTo(p.x - w / 2 - 1, p.y - h);
+      ctx.lineTo(p.x, p.y - h * 1.55);
+      ctx.lineTo(p.x + w / 2 + 1, p.y - h);
+      ctx.closePath();
+      ctx.fill();
+      // Jendela hangat.
+      if (night || dusk) {
+        ctx.fillStyle = '#ffca6a';
+        ctx.shadowColor = 'rgba(255,190,80,0.9)';
+        ctx.shadowBlur = Math.max(2, w * 0.4);
+        ctx.fillRect(p.x - w * 0.22, p.y - h * 0.72, w * 0.2, h * 0.3);
+        ctx.fillRect(p.x + w * 0.05, p.y - h * 0.72, w * 0.2, h * 0.3);
+        ctx.shadowBlur = 0;
+      }
+    }
+  }
+
+  // Palem di pantai: batang melengkung + pelepah.
+  function drawPalm(world, state, pal, wx, d, p) {
+    const horizonY = horizonYFor(state);
+    const camY = camYFor(state);
+    const g = terrainAt(world.course, d);
+    const base = project(wx, g, d - state.dist, state.x, camY, horizonY);
+    const top = project(wx, g + p.h, d - state.dist, state.x, camY, horizonY);
+    const hPx = base.y - top.y;
+    if (hPx < 3) return;
+    const lean = p.lean * hPx * 0.4;
+    ctx.strokeStyle = '#6b4a2a';
+    ctx.lineWidth = Math.max(1, hPx * 0.05);
+    ctx.beginPath();
+    ctx.moveTo(base.x, base.y);
+    ctx.quadraticCurveTo(base.x + lean * 0.4, base.y - hPx * 0.6, top.x + lean, top.y);
+    ctx.stroke();
+    ctx.strokeStyle = pal.landNear;
+    ctx.lineWidth = Math.max(1, hPx * 0.045);
+    for (let i = 0; i < 5; i++) {
+      const a = -0.4 - (i * Math.PI) / 7;
+      ctx.beginPath();
+      ctx.moveTo(top.x + lean, top.y);
+      ctx.quadraticCurveTo(
+        top.x + lean + Math.cos(a) * hPx * 0.42,
+        top.y + Math.sin(a) * hPx * 0.3 - hPx * 0.08,
+        top.x + lean + Math.cos(a) * hPx * 0.62,
+        top.y + Math.sin(a) * hPx * 0.42 + hPx * 0.14,
+      );
+      ctx.stroke();
+    }
+  }
+
+  // Hujan untuk palet badai: garis diagonal, posisi dari dist + indeks
+  // (deterministik per shot, bergerak saat waktu berjalan).
+  function drawRain(state, pal, time) {
+    if (!pal.rain) return;
+    ctx.strokeStyle = 'rgba(205,225,240,0.34)';
+    ctx.lineWidth = 1.2;
+    for (let i = 0; i < 90; i++) {
+      const hx = Math.sin(i * 12.9898) * 43758.5453;
+      const hy = Math.sin(i * 78.233) * 12543.1234;
+      const fx = hx - Math.floor(hx);
+      const fy = hy - Math.floor(hy);
+      const x = ((fx * W + time * 260 + state.dist * 0.35) % W + W) % W;
+      const y = ((fy * H + time * 620 + state.dist * 1.7) % H + H) % H;
+      const len = 12 + fy * 14;
+      ctx.beginPath();
+      ctx.moveTo(x, y);
+      ctx.lineTo(x - len * 0.22, y + len);
+      ctx.stroke();
+    }
+  }
+
   function drawBirds(world, state, time) {
     const horizonY = horizonYFor(state);
     const camY = camYFor(state);
@@ -347,10 +526,11 @@ export function createRenderer(canvas) {
   }
 
   // Pesawat dari belakang (chase view): badan, sayap, ekor, lampu nav.
+  // v3: pesawat 1,35x lebih besar di frame + baling-baling blur + halo lampu.
   function drawPlane(world, state, pal, time) {
     const px = W / 2;
-    const py = H * 0.66 - state.pitch * 26;
-    const s = Math.min(W, H) / 720; // skala dasar
+    const py = H * 0.68 - state.pitch * 26;
+    const s = (Math.min(W, H) / 720) * 1.35; // skala dasar
     ctx.save();
     ctx.translate(px, py);
     ctx.rotate(-state.bank * 0.85);
@@ -418,6 +598,14 @@ export function createRenderer(canvas) {
     ctx.beginPath();
     ctx.ellipse(-3, -55, 4, 3, -0.4, 0, Math.PI * 2);
     ctx.fill();
+    // Baling-baling: cakram blur di depan hidung (terlihat dari belakang).
+    ctx.save();
+    ctx.globalAlpha = 0.22;
+    ctx.fillStyle = '#cfd6dd';
+    ctx.beginPath();
+    ctx.ellipse(0, -58, 13, 34, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
     // Stabilizer horizontal + fin vertikal (ekor).
     ctx.fillStyle = '#e8e2d2';
     ctx.strokeStyle = '#b8b09a';
@@ -450,7 +638,19 @@ export function createRenderer(canvas) {
     ctx.arc(0, 22, 4.5, 0, Math.PI * 2);
     ctx.fill();
     // Lampu navigasi: merah kiri, hijau kanan, putih ekor (berkedip).
+    // Halo cahaya di tiap lampu supaya terbaca sebagai lampu menyala.
     const blink = Math.sin(time * 6) > 0;
+    for (const [lx, col] of [[-136, '#ff3b30'], [136, '#34d17b']]) {
+      const halo = ctx.createRadialGradient(lx, -18, 1, lx, -18, 16);
+      halo.addColorStop(0, col);
+      halo.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.globalAlpha = 0.5;
+      ctx.fillStyle = halo;
+      ctx.beginPath();
+      ctx.arc(lx, -18, 16, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+    }
     ctx.fillStyle = '#ff3b30';
     ctx.beginPath();
     ctx.arc(-136, -18, 4, 0, Math.PI * 2);
@@ -467,14 +667,14 @@ export function createRenderer(canvas) {
     }
     ctx.restore();
     // Bayangan pesawat di tanah/laut saat rendah.
-    if (state.alt < 260) {
+    if (state.alt < 600) {
       const horizonY = horizonYFor(state);
       const g = terrainAt(world.course, state.dist);
       const p = project(state.x, g, 30, state.x, camYFor(state), horizonY);
-      const a = clamp(1 - state.alt / 260, 0.1, 0.55);
+      const a = clamp(1 - state.alt / 600, 0.08, 0.4);
       ctx.fillStyle = `rgba(20,30,40,${a})`;
       ctx.beginPath();
-      ctx.ellipse(p.x, p.y + 4, 46 * (1 - state.alt / 320), 8, 0, 0, Math.PI * 2);
+      ctx.ellipse(p.x, p.y + 4, 46 * (1 - state.alt / 700), 8, 0, 0, Math.PI * 2);
       ctx.fill();
     }
   }
@@ -506,12 +706,17 @@ export function createRenderer(canvas) {
 
   function panel(x, y, w, h) {
     ctx.fillStyle = 'rgba(8,18,28,0.58)';
-    ctx.strokeStyle = 'rgba(255,255,255,0.22)';
-    ctx.lineWidth = 1;
     ctx.beginPath();
     ctx.roundRect(x, y, w, h, 8);
     ctx.fill();
+    // Bingkai menyala lembut (v3): instrumen terbaca sebagai panel hidup.
+    ctx.save();
+    ctx.shadowColor = 'rgba(255,176,46,0.5)';
+    ctx.shadowBlur = 10;
+    ctx.strokeStyle = 'rgba(255,220,150,0.4)';
+    ctx.lineWidth = 1;
     ctx.stroke();
+    ctx.restore();
   }
 
   function hudText(x, y, label, value, unit, opts = {}) {
@@ -580,7 +785,7 @@ export function createRenderer(canvas) {
   function drawArtificialHorizon(state) {
     const cx = 92;
     const cy = H - 92;
-    const r = 58;
+    const r = 66; // v3: lebih besar + bercahaya
     panel(cx - r - 12, cy - r - 12, (r + 12) * 2, (r + 12) * 2);
     ctx.save();
     ctx.beginPath();
@@ -616,6 +821,16 @@ export function createRenderer(canvas) {
     ctx.beginPath();
     ctx.arc(cx, cy, r, 0, Math.PI * 2);
     ctx.stroke();
+    // Cincin cahaya (v3): horizon buatan tampak menyala.
+    ctx.save();
+    ctx.shadowColor = 'rgba(255,176,46,0.7)';
+    ctx.shadowBlur = 12;
+    ctx.strokeStyle = 'rgba(255,220,150,0.55)';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(cx, cy, r + 2, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
   }
 
   function drawGauges(state) {
@@ -947,10 +1162,12 @@ export function createRenderer(canvas) {
     drawClouds(world, state, pal, time);
     drawGround(world, state, pal);
     drawRunway(world, state, pal);
+    drawLandmarks(world, state, pal, time);
     drawRings(world, state, pal);
     drawBirds(world, state, time);
     drawPlane(world, state, pal, time);
     drawSpeedLines(state);
+    drawRain(state, pal, time);
     drawVignette();
     if (screen === SCREEN_PLAY) drawHUD(world, state, time);
     if (screen === SCREEN_TITLE) drawTitle(world, bests, selected, difficulty);
